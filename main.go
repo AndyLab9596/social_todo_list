@@ -1,12 +1,14 @@
 package main
 
 import (
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -26,8 +28,8 @@ const (
 
 var allitemStatus = [3]string{"Doing", "Done", "Deleted"}
 
-func (item ItemStatus) String() string {
-	return allitemStatus[item]
+func (item *ItemStatus) String() string {
+	return allitemStatus[*item]
 }
 
 func parseStr2ItemStatus(s string) (ItemStatus, error) {
@@ -61,8 +63,32 @@ func (item *ItemStatus) Scan(value interface{}) error {
 	return nil
 }
 
+// Structure -> DB
+func (item *ItemStatus) Value() (driver.Value, error) {
+	if item == nil {
+		return nil, nil
+	}
+
+	return item.String(), nil
+}
+
+// JSON Encoding
 func (item *ItemStatus) MarshalJSON() ([]byte, error) {
+	if item == nil {
+		return nil, nil
+	}
 	return []byte(fmt.Sprintf("\"%s\"", item.String())), nil
+}
+
+// JSON Decoding
+func (item *ItemStatus) UnmarshalJSON(data []byte) error {
+	str := strings.ReplaceAll(string(data), "\"", "")
+	itemValue, err := parseStr2ItemStatus(str)
+	if err != nil {
+		return err
+	}
+	*item = itemValue
+	return nil
 }
 
 // ------Kết thúc khai báo enum
@@ -81,10 +107,10 @@ func (TodoItem) TableName() string {
 }
 
 type TodoItemCreation struct {
-	Id          int    `json:"-" gorm:"column:id"`
-	Title       string `json:"title" gorm:"column:title"`
-	Description string `json:"description" gorm:"column:description"`
-	Status      string `json:"status" gorm:"column:status"`
+	Id          int        `json:"-" gorm:"column:id"`
+	Title       string     `json:"title" gorm:"column:title"`
+	Description string     `json:"description" gorm:"column:description"`
+	Status      ItemStatus `json:"status" gorm:"column:status"`
 }
 
 func (TodoItemCreation) TableName() string {
@@ -179,6 +205,7 @@ func CreateItem(db *gorm.DB) func(c *gin.Context) {
 	return func(c *gin.Context) {
 		var data TodoItemCreation
 
+		// bind -> UnmarshalJSON -> bind data to *ItemStatus
 		if err := c.ShouldBind(&data); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),
@@ -186,6 +213,7 @@ func CreateItem(db *gorm.DB) func(c *gin.Context) {
 			return
 		}
 
+		// *ItemStatus -> Value()
 		if err := db.Create(&data).Error; err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error": err.Error(),
