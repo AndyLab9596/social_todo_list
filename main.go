@@ -9,12 +9,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"social_todo_list.com/common"
 )
 
 // -------Khai báo enum như sau:
@@ -94,12 +94,13 @@ func (item *ItemStatus) UnmarshalJSON(data []byte) error {
 // ------Kết thúc khai báo enum
 
 type TodoItem struct {
-	Id          int         `json:"id" gorm:"column:id"`
+	common.SQLModel
+	// Id          int         `json:"id" gorm:"column:id"`
 	Title       string      `json:"title" gorm:"column:title"`
 	Description string      `json:"description" gorm:"column:description"`
 	Status      *ItemStatus `json:"status" gorm:"column:status"`
-	CreatedAt   *time.Time  `json:"created_at" gorm:"column:created_at"`
-	UpdatedAt   *time.Time  `json:"updated_at,omitempty" gorm:"column:updated_at"`
+	// CreatedAt   *time.Time  `json:"created_at" gorm:"column:created_at"`
+	// UpdatedAt   *time.Time  `json:"updated_at,omitempty" gorm:"column:updated_at"`
 }
 
 func (TodoItem) TableName() string {
@@ -126,23 +127,6 @@ type TodoItemUpdate struct {
 
 func (TodoItemUpdate) TableName() string {
 	return TodoItem{}.TableName()
-}
-
-// form tag để parse query string trên params
-type Paging struct {
-	Page  int   `json:"page" form:"page"`
-	Limit int   `json:"limit" form:"limit"`
-	Total int64 `json:"total" form:"-"`
-}
-
-func (p *Paging) Process() {
-	if p.Page <= 0 {
-		p.Page = 1
-	}
-
-	if p.Limit <= 0 || p.Limit >= 100 {
-		p.Limit = 10
-	}
 }
 
 func main() {
@@ -221,10 +205,7 @@ func CreateItem(db *gorm.DB) func(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"data": data.Id,
-		})
-
+		c.JSON(http.StatusOK, common.SimpleSuccessResponse(data.Id))
 	}
 }
 
@@ -251,9 +232,7 @@ func GetItem(db *gorm.DB) func(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"data": data,
-		})
+		c.JSON(http.StatusOK, common.SimpleSuccessResponse(data))
 
 	}
 }
@@ -285,9 +264,7 @@ func UpdateItem(db *gorm.DB) func(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"data": true,
-		})
+		c.JSON(http.StatusOK, common.SimpleSuccessResponse(true))
 
 	}
 }
@@ -312,16 +289,14 @@ func DeleteItem(db *gorm.DB) func(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"data": true,
-		})
+		c.JSON(http.StatusOK, common.SimpleSuccessResponse(true))
 
 	}
 }
 
 func ListItem(db *gorm.DB) func(c *gin.Context) {
 	return func(c *gin.Context) {
-		var paging Paging
+		var paging common.Paging
 
 		if err := c.ShouldBind(&paging); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{
@@ -353,10 +328,7 @@ func ListItem(db *gorm.DB) func(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"data":   result,
-			"paging": paging,
-		})
+		c.JSON(http.StatusOK, common.NewSuccessResponse(result, paging, nil))
 
 	}
 }
