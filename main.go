@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,13 +15,65 @@ import (
 	"gorm.io/gorm"
 )
 
+// -------Khai báo enum như sau:
+type ItemStatus int
+
+const (
+	ItemStatusDoing ItemStatus = iota
+	ItemStatusDone
+	ItemStatusDeleted
+)
+
+var allitemStatus = [3]string{"Doing", "Done", "Deleted"}
+
+func (item ItemStatus) String() string {
+	return allitemStatus[item]
+}
+
+func parseStr2ItemStatus(s string) (ItemStatus, error) {
+	for i := range allitemStatus {
+		if allitemStatus[i] == s {
+			return ItemStatus(i), nil
+		}
+	}
+
+	return ItemStatus(0), errors.New("invalid status string")
+}
+
+// dùng để scan dữ liệu từ DB -> enum
+// vì dữ liệu dưới DB và structure hiện tại đang khác nhau.
+func (item *ItemStatus) Scan(value interface{}) error {
+	// casting value -> []byte
+	bytes, ok := value.([]byte)
+
+	if !ok {
+		return fmt.Errorf("fail to scan data from sql: %s", value)
+	}
+
+	strValue := string(bytes)
+
+	v, err := parseStr2ItemStatus(strValue)
+	if err != nil {
+		return fmt.Errorf("fail to scan data from sql: %s", value)
+	}
+
+	*item = v
+	return nil
+}
+
+func (item *ItemStatus) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf("\"%s\"", item.String())), nil
+}
+
+// ------Kết thúc khai báo enum
+
 type TodoItem struct {
-	Id          int        `json:"id" gorm:"column:id"`
-	Title       string     `json:"title" gorm:"column:title"`
-	Description string     `json:"description" gorm:"column:description"`
-	Status      string     `json:"status" gorm:"column:status"`
-	CreatedAt   *time.Time `json:"created_at" gorm:"column:created_at"`
-	UpdatedAt   *time.Time `json:"updated_at,omitempty" gorm:"column:updated_at"`
+	Id          int         `json:"id" gorm:"column:id"`
+	Title       string      `json:"title" gorm:"column:title"`
+	Description string      `json:"description" gorm:"column:description"`
+	Status      *ItemStatus `json:"status" gorm:"column:status"`
+	CreatedAt   *time.Time  `json:"created_at" gorm:"column:created_at"`
+	UpdatedAt   *time.Time  `json:"updated_at,omitempty" gorm:"column:updated_at"`
 }
 
 func (TodoItem) TableName() string {
@@ -81,16 +134,16 @@ func main() {
 
 	fmt.Println(db)
 
-	now := time.Now().UTC()
+	// now := time.Now().UTC()
 
-	item := TodoItem{
-		Id:          1,
-		Title:       "This is item 1",
-		Description: "This is item 1",
-		Status:      "Doing",
-		CreatedAt:   &now,
-		UpdatedAt:   nil,
-	}
+	// item := TodoItem{
+	// 	Id:          1,
+	// 	Title:       "This is item 1",
+	// 	Description: "This is item 1",
+	// 	Status:      ItemStatusDoing,
+	// 	CreatedAt:   &now,
+	// 	UpdatedAt:   nil,
+	// }
 
 	r := gin.Default()
 
@@ -114,11 +167,11 @@ func main() {
 		}
 	}
 
-	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": item,
-		})
-	})
+	// r.GET("/ping", func(c *gin.Context) {
+	// 	c.JSON(http.StatusOK, gin.H{
+	// 		"message": item,
+	// 	})
+	// })
 	r.Run() // listen and serve on 0.0.0.0:8080 (for windows "localhost:8080")
 }
 
